@@ -1,5 +1,7 @@
 package edu.uw.fragmentdemo;
 
+import android.app.FragmentManager;
+import android.app.FragmentTransaction;
 import android.os.AsyncTask;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
@@ -24,7 +26,7 @@ import java.net.URL;
 import java.net.URLEncoder;
 import java.util.ArrayList;
 
-public class MovieActivity extends AppCompatActivity {
+public class MovieActivity extends AppCompatActivity implements MovieFragment.OnMovieSelectionListener {
 
     private static final String TAG = "MovieActivity";
 
@@ -35,142 +37,41 @@ public class MovieActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        Button searchButton = (Button)findViewById(R.id.btnSearch);
-        searchButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                Log.i(TAG, "searching...");
+        FragmentManager manager = getFragmentManager();
 
-                MovieDownloadTask task = new MovieDownloadTask();
-                EditText searchBox = (EditText)findViewById(R.id.txtSearch);
-                String searchTerm = searchBox.getText().toString();
-                task.execute(searchTerm);
-            }
-        });
+        FragmentTransaction ft = manager.beginTransaction();
 
-        /** List View **/
-        //model (starts out empty)
-        ArrayList<Movie> list = new ArrayList<Movie>();
+        ft.add(R.id.container, new MovieFragment());
 
-        //controller
-        adapter = new ArrayAdapter<Movie>(
-                this, R.layout.list_item, R.id.txtItem, list);
-
-        //support ListView or GridView
-        AdapterView listView = (AdapterView)findViewById(R.id.listView);
-        listView.setAdapter(adapter);
-
-        //respond to item clicking
-        listView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
-            @Override
-            public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
-                Movie movie = (Movie) parent.getItemAtPosition(position);
-                Log.i(TAG, "selected: " + movie.toString());
-
-            }
-        });
+        ft.commit();
 
     }
 
-    /**
-     * A background task to search for movie data on OMDB
-     */
-    public class MovieDownloadTask extends AsyncTask<String, Void, ArrayList<Movie>> {
 
-        protected ArrayList<Movie> doInBackground(String... params){
+    @Override
+    public void onMovieSelected(Movie movie) {
+        //swap the fragments
 
-            String movie = params[0];
+        DetailFragment detail = new DetailFragment();
 
-            //construct the url for the omdbapi API
-            String urlString = "";
-            try {
-                urlString = "http://www.omdbapi.com/?s=" + URLEncoder.encode(movie, "UTF-8") + "&type=movie";
-            }catch(UnsupportedEncodingException uee){
-                return null;
-            }
+        Bundle bundle = new Bundle();
 
-            HttpURLConnection urlConnection = null;
-            BufferedReader reader = null;
+        bundle.putString("title", movie.title);
+        bundle.putString("imdb", movie.imdbId);
 
-            ArrayList<Movie> movies = new ArrayList<Movie>();
+        detail.setArguments(bundle);
 
-            try {
+        getFragmentManager().beginTransaction()
+                .replace(R.id.container, detail)
+                .addToBackStack(null)
+                .commit();
+    }
 
-                URL url = new URL(urlString);
-
-                urlConnection = (HttpURLConnection) url.openConnection();
-                urlConnection.setRequestMethod("GET");
-                urlConnection.connect();
-
-                InputStream inputStream = urlConnection.getInputStream();
-                StringBuffer buffer = new StringBuffer();
-                if (inputStream == null) {
-                    return null;
-                }
-                reader = new BufferedReader(new InputStreamReader(inputStream));
-
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    buffer.append(line + "\n");
-                }
-
-                if (buffer.length() == 0) {
-                    return null;
-                }
-                String results = buffer.toString();
-
-                movies = parseMovieJSONData(results); //convert JSON results into Movie objects
-            }
-            catch (IOException e) {
-                return null;
-            }
-            finally {
-                if (urlConnection != null) {
-                    urlConnection.disconnect();
-                }
-                if (reader != null) {
-                    try {
-                        reader.close();
-                    }
-                    catch (final IOException e) {
-                    }
-                }
-            }
-
-            return movies;
-        }
-
-        protected void onPostExecute(ArrayList<Movie> movies){
-            if(movies != null) {
-                adapter.clear();
-                adapter.addAll(movies);
-            }
-        }
-
-        /**
-         * Parses a JSON-format String (from OMDB search results) into a list of Movie objects
-         */
-        public ArrayList<Movie> parseMovieJSONData(String json){
-            ArrayList<Movie> movies = new ArrayList<Movie>();
-
-            try {
-                JSONArray moviesJsonArray = new JSONObject(json).getJSONArray("Search"); //get array from "search" key
-                for(int i=0; i<moviesJsonArray.length(); i++){
-                    JSONObject movieJsonObject = moviesJsonArray.getJSONObject(i); //get ith object from array
-                    Movie movie = new Movie();
-                    movie.title = movieJsonObject.getString("Title"); //get title from object
-                    movie.year = Integer.parseInt(movieJsonObject.getString("Year")); //get year from object
-                    movie.imdbId = movieJsonObject.getString("imdbID"); //get imdb from object
-                    movie.posterUrl = movieJsonObject.getString("Poster"); //get poster from object
-
-                    movies.add(movie);
-                }
-            } catch (JSONException e) {
-                Log.e(TAG, "Error parsing json", e);
-                return null;
-            }
-
-            return movies;
+    public void onBackPressed() {
+        if(getFragmentManager().getBackStackEntryCount() != 0) {
+            getFragmentManager().popBackStack();
+        } else {
+            super.onBackPressed();
         }
     }
 }
